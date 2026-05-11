@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const personas = [
   { value: "default", label: "Friendly Assistant" },
   { value: "medieval", label: "Medieval Assistant" },
   { value: "pirate", label: "Pirate Assistant" },
+];
+
+const themes = [
+  { value: "default", label: "Default" },
+  { value: "dark", label: "Dark" },
+  { value: "light", label: "Light" },
 ];
 
 const initialMessages = [
@@ -63,8 +69,23 @@ export function TerminalPortfolio() {
   const [messages, setMessages] = useState(initialMessages);
   const [inputValue, setInputValue] = useState("");
   const [persona, setPersona] = useState("default");
+  const [theme, setTheme] = useState("default");
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("portfolio-theme");
+    if (themes.some((item) => item.value === savedTheme)) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme =
+      theme === "light" ? "light" : "dark";
+    window.localStorage.setItem("portfolio-theme", theme);
+  }, [theme]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -132,19 +153,35 @@ export function TerminalPortfolio() {
             <span className="dot green" />
           </div>
           <div className="title">agentic-terminal - next.js edition</div>
-          <label className="persona-picker">
-            <span className="sr-only">Select assistant persona</span>
-            <select
-              value={persona}
-              onChange={(event) => setPersona(event.target.value)}
-            >
-              {personas.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="header-pickers">
+            <label className="theme-picker">
+              <span className="sr-only">Select interface theme</span>
+              <select
+                value={theme}
+                onChange={(event) => setTheme(event.target.value)}
+              >
+                {themes.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="persona-picker">
+              <span className="sr-only">Select assistant persona</span>
+              <select
+                value={persona}
+                onChange={(event) => setPersona(event.target.value)}
+              >
+                {personas.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </header>
 
         <div className="terminal-body">

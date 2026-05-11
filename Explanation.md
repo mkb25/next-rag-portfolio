@@ -255,7 +255,7 @@ message bubbles, blinking caret, etc.).
 
 ## 7. Configuration
 
-Environment variables (loaded by Next.js from `.env`):
+Environment variables (loaded by Next.js from `.env.local`):
 
 | Variable                   | Used by               | Required |
 | -------------------------- | --------------------- | -------- |

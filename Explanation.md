@@ -33,8 +33,8 @@ questions short and on-brand.
   pdfLoader.js    embedder.js           llm.js
        │               │                     ▲
        ▼               ▼                     │
-   Chunker      VectorStore (in-mem)         │
-   chunker.js   vectorStore.js  ─────────────┘
+  Chunker      VectorStore / Upstash        │
+  chunker.js   vectorStore.js  ─────────────┘
                                 top-k chunks + persona
 ```
 
@@ -43,9 +43,11 @@ Two external services are used:
 - **Hugging Face Inference API** — `sentence-transformers/all-MiniLM-L6-v2`
   embeddings (`HUGGINGFACEHUB_API_TOKEN`).
 - **Groq** — `openai/gpt-oss-120b` chat completions (`GROQ_API_KEY`).
+- **Upstash Vector** — optional cloud vector database
+  (`UPSTASH_VECTOR_REST_URL`, `UPSTASH_VECTOR_REST_TOKEN`).
 
-Everything else (PDF parsing, chunking, vector search) runs in-process inside
-the Next.js Node runtime.
+PDF parsing and chunking run in-process inside the Next.js Node runtime. Vector
+search runs in memory by default, or in Upstash Vector when configured.
 
 ---
 
@@ -66,6 +68,7 @@ lib/rag/
   chunker.js             Splits text into overlapping word chunks
   embedder.js            Calls HF to embed text (single + batch)
   vectorStore.js         In-memory cosine-similarity vector index
+  upstashVectorStore.js  Optional Upstash Vector REST-backed index
   store.js               Builds the index once and answers questions
   llm.js                 Builds the system prompt + calls Groq
   personas.js            Three assistant voices (default / medieval / pirate)
@@ -91,11 +94,14 @@ content/
      50-word overlap (sliding window) so context is not lost at boundaries.
    - Chunks are embedded in batches of 10 via `embedBatch()` →
      Hugging Face inference (`all-MiniLM-L6-v2`, 384-dim vectors).
-   - A `VectorStore` is created and populated with `(text, embedding)` pairs.
+   - A vector store is created and populated with `(text, embedding)` pairs. By
+     default this is the local `VectorStore`; with `RAG_VECTOR_STORE=upstash`,
+     chunks are upserted into Upstash Vector.
    - The resolved store is cached on the module-level `storePromise`.
 4. The user's question is embedded with `embedText()`.
-5. `store.search(queryEmbedding, 5)` ranks all chunks by cosine similarity and
-   returns the top 5.
+5. `store.search(queryEmbedding, 5)` returns the top 5 chunks. In memory mode it
+   ranks all chunks by cosine similarity; in Upstash mode the query runs against
+   the cloud vector index.
 6. `generateAnswer(question, topChunks, persona)` builds a system prompt
    (persona + intent rules + retrieved context) and asks Groq for a completion.
 7. The route handler returns `{ answer }` as JSON.
@@ -151,16 +157,30 @@ network calls per request.
 - O(N · D) per query. Trivial for resume-sized corpora; would need an ANN
   index (FAISS, pgvector, etc.) for larger datasets.
 
-### 4.6 `lib/rag/store.js`
+### 4.6 `lib/rag/upstashVectorStore.js`
+
+- Optional cloud vector store using the Upstash Vector REST API.
+- `addDocuments(chunks, embeddings)` upserts records with stable IDs like
+  `Resume.pdf:chunk:0`.
+- Each record stores the vector, metadata (`source`, `chunkIndex`), and the
+  original chunk text in Upstash's `data` field.
+- `search(queryEmbedding, topK)` calls Upstash `/query` with `includeData` so
+  the LLM still receives the retrieved text chunks.
+
+### 4.7 `lib/rag/store.js`
 
 - The orchestrator. Holds the singleton `storePromise` so the PDF is parsed
   and embedded **once per server process**.
+- Chooses the vector backend. Default is the in-memory `VectorStore`; set
+  `RAG_VECTOR_STORE=upstash` to use Upstash Vector.
+- In Upstash mode, set `RAG_SKIP_INDEX_BUILD=true` after the cloud index is
+  already populated to avoid re-parsing and re-upserting chunks on cold starts.
 - If `buildStore()` throws, the cached promise is cleared so the next request
   retries instead of permanently failing.
 - `answerQuestion(question, persona)` is the single entry point used by the
   API route.
 
-### 4.7 `lib/rag/personas.js`
+### 4.8 `lib/rag/personas.js`
 
 Three personas, each with a `name` and a `systemPrompt`:
 
@@ -172,7 +192,7 @@ Each prompt enforces shared rules: greet as the persona, handle meta-questions
 ("who are you?") as the persona, and otherwise speak in the third person about
 Mohana.
 
-### 4.8 `lib/rag/llm.js` — Prompt assembly + guardrails
+### 4.9 `lib/rag/llm.js` — Prompt assembly + guardrails
 
 This is the brain of response shaping. `getSystemPrompt(query, persona, context)`
 starts from `persona.systemPrompt` and conditionally appends extra
@@ -261,6 +281,11 @@ Environment variables (loaded by Next.js from `.env.local`):
 | -------------------------- | --------------------- | -------- |
 | `HUGGINGFACEHUB_API_TOKEN` | `lib/rag/embedder.js` | Yes      |
 | `GROQ_API_KEY`             | `lib/rag/llm.js`      | Yes      |
+| `RAG_VECTOR_STORE`          | `lib/rag/store.js`    | No       |
+| `UPSTASH_VECTOR_REST_URL`   | `upstashVectorStore`  | Upstash  |
+| `UPSTASH_VECTOR_REST_TOKEN` | `upstashVectorStore`  | Upstash  |
+| `UPSTASH_VECTOR_NAMESPACE`  | `upstashVectorStore`  | No       |
+| `RAG_SKIP_INDEX_BUILD`      | `lib/rag/store.js`    | No       |
 
 Resume content:
 
@@ -281,12 +306,15 @@ Key dependencies: `next@^15.3.2`, `react@^19`, `groq-sdk`, `pdf-parse`,
 ## 8. Performance & Caching Notes
 
 - **One-time index build**: PDF parsing + embedding happens lazily on the
-  first request and is cached in module scope (`storePromise`). All later
-  requests in the same process skip it.
-- **Per-request cost**: 1 embedding call (query) + 1 LLM call. Vector search
-  is local and cheap.
-- **Cold start after deploy / restart**: rebuilds the index; expect a
-  one-time delay proportional to chunk count × embedding latency.
+  first request and is cached in module scope (`storePromise`). In Upstash mode,
+  the same build step also upserts chunks to the cloud vector index unless
+  `RAG_SKIP_INDEX_BUILD=true`.
+- **Per-request cost**: 1 embedding call (query) + 1 LLM call. In memory mode,
+  vector search is local and cheap; in Upstash mode, there is also one vector
+  query request.
+- **Cold start after deploy / restart**: memory mode rebuilds the index; expect
+  a one-time delay proportional to chunk count × embedding latency. Upstash mode
+  can skip rebuilding once the cloud index is populated.
 - **Process memory**: 384-dim float vectors × N chunks; negligible for a
   resume.
 
@@ -298,8 +326,8 @@ Likely next steps if you want to grow it:
 
 - **Multi-document corpus**: extend `buildStore()` to load every PDF/MD file
   under `content/`, tag chunks with their source, and surface citations.
-- **Persistent vector store**: swap `VectorStore` for SQLite + sqlite-vss,
-  pgvector, or a hosted store so you don't re-embed on every cold start.
+- **Persistent vector store**: Upstash Vector is now supported; pgvector or
+  Pinecone would be natural alternatives for larger or more relational corpora.
 - **Smarter chunking**: sentence- or section-aware splitting (headings,
   bullet groups) for better retrieval quality on long documents.
 - **Streaming responses**: switch the route to a streaming response and
@@ -314,7 +342,8 @@ Likely next steps if you want to grow it:
 ## 10. TL;DR
 
 - A resume PDF is parsed, chunked, embedded with Hugging Face, and stored in
-  an in-memory cosine-similarity index — once per server process.
+  an in-memory cosine-similarity index by default, or in Upstash Vector when
+  configured.
 - Each user question is embedded, the top-5 chunks are retrieved, and Groq
   generates the answer using a persona-specific system prompt.
 - An intent layer in `llm.js` handles greetings, meta-questions, and an

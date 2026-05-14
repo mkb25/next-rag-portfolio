@@ -12,7 +12,7 @@ For a deep dive into how every module works, see [Explanation.md](Explanation.md
 ## Features
 
 - **RAG over a resume PDF** — text extraction, sliding-window chunking,
-  Hugging Face embeddings, in-memory cosine-similarity search.
+  Hugging Face embeddings, and either in-memory or Upstash Vector search.
 - **Groq LLM responses** — fast `openai/gpt-oss-120b` completions grounded in
   the retrieved context.
 - **Three personas** — `default` (Alex), `medieval` (Sir Advisor),
@@ -22,6 +22,8 @@ For a deep dive into how every module works, see [Explanation.md](Explanation.md
   `2+2` or `what is RAG`, then steers the conversation back to the portfolio.
 - **Terminal-style UI** — single-page client component with ASCII banner,
   persona dropdown, and a typing animation.
+- **Slash commands** — local terminal commands such as `/clear`, `/help`,
+  `/download`, `/history`, `/persona medieval`, and `/theme dark`.
 
 ---
 
@@ -33,6 +35,7 @@ For a deep dive into how every module works, see [Explanation.md](Explanation.md
 - [@huggingface/inference](https://www.npmjs.com/package/@huggingface/inference) —
   `sentence-transformers/all-MiniLM-L6-v2` embeddings
 - [pdf-parse](https://www.npmjs.com/package/pdf-parse) — PDF text extraction
+- [Upstash Vector](https://upstash.com/vector) — optional cloud vector database
 
 ---
 
@@ -51,6 +54,7 @@ lib/rag/
   chunker.js              Word-based sliding-window chunking
   embedder.js             Hugging Face embeddings (single + batch)
   vectorStore.js          In-memory cosine-similarity index
+  upstashVectorStore.js   Optional Upstash Vector REST index
   store.js                Builds the index once; answers questions
   llm.js                  Prompt assembly, intent detection, Groq call
   personas.js             Three assistant voices
@@ -98,6 +102,24 @@ HUGGINGFACEHUB_API_TOKEN=your_hf_token_here
 
 `.env*` files are gitignored.
 
+To use Upstash Vector instead of the in-memory store, create an Upstash Vector
+index with 384 dimensions for `sentence-transformers/all-MiniLM-L6-v2`, then add:
+
+```bash
+RAG_VECTOR_STORE=upstash
+UPSTASH_VECTOR_REST_URL=your_upstash_vector_rest_url
+UPSTASH_VECTOR_REST_TOKEN=your_upstash_vector_rest_token
+UPSTASH_VECTOR_NAMESPACE=resume
+```
+
+The first request will parse the PDF, embed the chunks, and upsert them to
+Upstash. After the index is populated, you can set this to skip re-upserting on
+cold starts:
+
+```bash
+RAG_SKIP_INDEX_BUILD=true
+```
+
 ### 5. Run
 
 ```bash
@@ -107,7 +129,8 @@ npm run start    # serve the production build
 ```
 
 The first request after a cold start will parse the PDF and embed all chunks
-once; subsequent requests reuse the in-memory index.
+once. In memory mode, subsequent requests reuse the process-local index. In
+Upstash mode, chunks are searched from the cloud vector index.
 
 ---
 

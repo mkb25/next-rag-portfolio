@@ -20,6 +20,9 @@ For a deep dive into how every module works, see [Explanation.md](Explanation.md
 - **Intent-aware prompts** — special handling for greetings, meta-questions,
   and a playful **off-topic guardrail** that briefly answers things like
   `2+2` or `what is RAG`, then steers the conversation back to the portfolio.
+- **Other GitHub projects** — pulls recent public GitHub repos into the prompt
+  as a separate "Other Projects" section, without mixing them into the
+  resume-highlighted projects.
 - **Terminal-style UI** — single-page client component with ASCII banner,
   persona dropdown, and a typing animation.
 - **Slash commands** — local terminal commands such as `/clear`, `/help`,
@@ -49,6 +52,8 @@ app/
   api/rag/route.js        POST /api/rag handler
 components/
   TerminalPortfolio.js    Client UI (chat log, persona picker, input)
+lib/github/
+  projects.js             Optional GitHub repo context for other projects
 lib/rag/
   pdfLoader.js            Read + extract text from the resume PDF
   chunker.js              Word-based sliding-window chunking
@@ -101,6 +106,20 @@ HUGGINGFACEHUB_API_TOKEN=your_hf_token_here
 ```
 
 `.env*` files are gitignored.
+
+GitHub project context works with public repos by default. It currently falls
+back to the resume GitHub username (`mkb25`), but you can override it:
+
+```bash
+GITHUB_USERNAME=your_github_username
+GITHUB_TOKEN=optional_real_github_token_for_higher_rate_limits
+GITHUB_REPO_LIMIT=8
+GITHUB_EXCLUDED_REPOS=repo-to-hide,another-repo
+```
+
+Repos from GitHub are injected as `OTHER GITHUB PROJECTS`, so the assistant
+labels them separately from resume-highlighted projects.
+If you do not have a real GitHub token, leave `GITHUB_TOKEN` unset.
 
 To use Upstash Vector instead of the in-memory store, create an Upstash Vector
 index with 384 dimensions for `sentence-transformers/all-MiniLM-L6-v2`, then add:

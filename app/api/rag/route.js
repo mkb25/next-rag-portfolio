@@ -8,12 +8,13 @@ export async function POST(request) {
     const body = await request.json();
     const question = body?.question?.trim();
     const persona = body?.persona || "default";
+    const history = Array.isArray(body?.history) ? body.history : [];
 
     if (!question) {
       return NextResponse.json({ error: "Missing question" }, { status: 400 });
     }
 
-    const answer = await answerQuestion(question, persona);
+    const answer = await answerQuestion(question, persona, history);
     return NextResponse.json({ answer });
   } catch (error) {
     return NextResponse.json(

@@ -210,6 +210,12 @@ select {
   flex-direction: column;
   gap: 16px;
   padding: 24px;
+  scroll-behavior: smooth;
+}
+
+.messages-end {
+  height: 1px;
+  flex: 0 0 1px;
 }
 
 .message {
@@ -257,8 +263,23 @@ select {
 .markdown-content p,
 .markdown-content ul,
 .markdown-content ol,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
 .markdown-content pre {
   margin: 0;
+}
+
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5 {
+  color: var(--accent-strong);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.markdown-content h3 {
+  margin-top: 2px;
 }
 
 .markdown-content ul,
@@ -279,6 +300,33 @@ select {
   color: var(--accent-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+.markdown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.markdown-content th,
+.markdown-content td {
+  border: 1px solid rgba(121, 184, 255, 0.18);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-content th {
+  color: var(--accent-strong);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 700;
 }
 
 .markdown-content code {

@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { MarkdownContent } from "@/components/MarkdownContent";
+
+const RAG_API_ENDPOINT = "/api/rag";
+const THEME_STORAGE_KEY = "portfolio-theme";
+const DEFAULT_ERROR_MESSAGE = "Failed to get an answer.";
 
 const personas = [
   { value: "default", label: "Friendly Assistant" },
@@ -32,9 +37,13 @@ const slashCommandHelp = [
 ];
 
 function createSystemMessage(content) {
+  return createMessage("system", content);
+}
+
+function createMessage(role, content) {
   return {
-    id: `system-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    role: "system",
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    role,
     content,
   };
 }
@@ -45,6 +54,14 @@ function formatOptionValues(options) {
 
 function findOption(options, value) {
   return options.find((item) => item.value === value);
+}
+
+function isValidTheme(value) {
+  return themes.some((item) => item.value === value);
+}
+
+function formatHistoryList(historyItems) {
+  return historyItems.map((item, index) => `${index + 1}. ${item}`).join("\n");
 }
 
 function triggerResumeDownload() {
@@ -69,185 +86,6 @@ const asciiArt = String.raw`
               ░░██████
                ░░░░░░
 `;
-
-function isSafeUrl(url) {
-  return /^(https?:|mailto:|tel:)/i.test(url);
-}
-
-function renderInlineMarkdown(text, keyPrefix) {
-  const parts = [];
-  const pattern =
-    /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|\[[^\]]+\]\([^)]+\))/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
-    }
-
-    const token = match[0];
-    const key = `${keyPrefix}-${match.index}`;
-
-    if (token.startsWith("`")) {
-      parts.push(<code key={key}>{token.slice(1, -1)}</code>);
-    } else if (token.startsWith("**") || token.startsWith("__")) {
-      parts.push(
-        <strong key={key}>
-          {renderInlineMarkdown(token.slice(2, -2), `${key}-strong`)}
-        </strong>,
-      );
-    } else if (token.startsWith("*") || token.startsWith("_")) {
-      parts.push(
-        <em key={key}>
-          {renderInlineMarkdown(token.slice(1, -1), `${key}-em`)}
-        </em>,
-      );
-    } else {
-      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-      const label = linkMatch?.[1] || token;
-      const href = linkMatch?.[2] || "";
-
-      parts.push(
-        isSafeUrl(href) ? (
-          <a key={key} href={href} target="_blank" rel="noreferrer">
-            {renderInlineMarkdown(label, `${key}-link`)}
-          </a>
-        ) : (
-          label
-        ),
-      );
-    }
-
-    lastIndex = pattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
-  }
-
-  return parts;
-}
-
-function parseMarkdownBlocks(markdown) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
-  const blocks = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-
-    const fenceMatch = line.match(/^```(\w+)?\s*$/);
-    if (fenceMatch) {
-      const language = fenceMatch[1] || "";
-      const codeLines = [];
-      index += 1;
-
-      while (index < lines.length && !lines[index].match(/^```\s*$/)) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-
-      blocks.push({
-        type: "code",
-        language,
-        content: codeLines.join("\n"),
-      });
-      index += 1;
-      continue;
-    }
-
-    const unorderedMatch = line.match(/^\s*[-*+]\s+(.+)$/);
-    if (unorderedMatch) {
-      const items = [];
-
-      while (index < lines.length) {
-        const itemMatch = lines[index].match(/^\s*[-*+]\s+(.+)$/);
-        if (!itemMatch) break;
-        items.push(itemMatch[1]);
-        index += 1;
-      }
-
-      blocks.push({ type: "ul", items });
-      continue;
-    }
-
-    const orderedMatch = line.match(/^\s*\d+[.)]\s+(.+)$/);
-    if (orderedMatch) {
-      const items = [];
-
-      while (index < lines.length) {
-        const itemMatch = lines[index].match(/^\s*\d+[.)]\s+(.+)$/);
-        if (!itemMatch) break;
-        items.push(itemMatch[1]);
-        index += 1;
-      }
-
-      blocks.push({ type: "ol", items });
-      continue;
-    }
-
-    const paragraphLines = [];
-    while (
-      index < lines.length &&
-      lines[index].trim() &&
-      !lines[index].match(/^```(\w+)?\s*$/) &&
-      !lines[index].match(/^\s*[-*+]\s+(.+)$/) &&
-      !lines[index].match(/^\s*\d+[.)]\s+(.+)$/)
-    ) {
-      paragraphLines.push(lines[index].trim());
-      index += 1;
-    }
-
-    blocks.push({ type: "paragraph", content: paragraphLines.join(" ") });
-  }
-
-  return blocks;
-}
-
-function MarkdownContent({ content }) {
-  const blocks = parseMarkdownBlocks(content || "");
-
-  return (
-    <div className="markdown-content">
-      {blocks.map((block, blockIndex) => {
-        if (block.type === "code") {
-          return (
-            <pre key={`block-${blockIndex}`}>
-              {block.language ? <span>{block.language}</span> : null}
-              <code>{block.content}</code>
-            </pre>
-          );
-        }
-
-        if (block.type === "ul" || block.type === "ol") {
-          const listItems = block.items.map((item, itemIndex) => (
-            <li key={`item-${blockIndex}-${itemIndex}`}>
-              {renderInlineMarkdown(item, `item-${blockIndex}-${itemIndex}`)}
-            </li>
-          ));
-
-          return block.type === "ul" ? (
-            <ul key={`block-${blockIndex}`}>{listItems}</ul>
-          ) : (
-            <ol key={`block-${blockIndex}`}>{listItems}</ol>
-          );
-        }
-
-        return (
-          <p key={`block-${blockIndex}`}>
-            {renderInlineMarkdown(block.content, `block-${blockIndex}`)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
 
 function WelcomeMessage() {
   return (
@@ -283,6 +121,16 @@ function MessageBubble({ message }) {
   );
 }
 
+function toApiHistory(messages) {
+  return messages
+    .filter((message) => message.role === "user" || message.role === "agent")
+    .slice(-8)
+    .map((message) => ({
+      role: message.role === "agent" ? "assistant" : "user",
+      content: message.content,
+    }));
+}
+
 export function TerminalPortfolio() {
   const [messages, setMessages] = useState(initialMessages);
   const [inputValue, setInputValue] = useState("");
@@ -291,6 +139,8 @@ export function TerminalPortfolio() {
   const [commandHistory, setCommandHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(null);
   const draftInputRef = useRef("");
+  const terminalBodyRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -299,6 +149,28 @@ export function TerminalPortfolio() {
       ...currentMessages,
       createSystemMessage(content),
     ]);
+  }
+
+  function showCurrentOption(name, currentValue, options) {
+    appendSystemMessage(
+      `Current ${name}: ${currentValue}. Options: ${formatOptionValues(options)}.`,
+    );
+  }
+
+  function switchOption({ name, value, options, onChange }) {
+    const nextOption = findOption(options, value);
+
+    appendSystemMessage(
+      nextOption
+        ? `${name} switched to ${nextOption.label}.`
+        : `Unknown ${name.toLowerCase()} "${value}". Options: ${formatOptionValues(
+            options,
+          )}.`,
+    );
+
+    if (nextOption) {
+      onChange(nextOption.value);
+    }
   }
 
   function handleSlashCommand(rawCommand, historySnapshot) {
@@ -326,9 +198,7 @@ export function TerminalPortfolio() {
         const recentHistory = historySnapshot.slice(-10);
         appendSystemMessage(
           recentHistory.length
-            ? `Recent history:\n${recentHistory
-                .map((item, index) => `${index + 1}. ${item}`)
-                .join("\n")}`
+            ? `Recent history:\n${formatHistoryList(recentHistory)}`
             : "History is empty.",
         );
         return true;
@@ -336,49 +206,31 @@ export function TerminalPortfolio() {
 
       case "persona": {
         if (!value) {
-          appendSystemMessage(
-            `Current persona: ${persona}. Options: ${formatOptionValues(
-              personas,
-            )}.`,
-          );
+          showCurrentOption("persona", persona, personas);
           return true;
         }
 
-        const nextPersona = findOption(personas, value);
-        appendSystemMessage(
-          nextPersona
-            ? `Persona switched to ${nextPersona.label}.`
-            : `Unknown persona "${value}". Options: ${formatOptionValues(
-                personas,
-              )}.`,
-        );
-
-        if (nextPersona) {
-          setPersona(nextPersona.value);
-        }
-
+        switchOption({
+          name: "Persona",
+          value,
+          options: personas,
+          onChange: setPersona,
+        });
         return true;
       }
 
       case "theme": {
         if (!value) {
-          appendSystemMessage(
-            `Current theme: ${theme}. Options: ${formatOptionValues(themes)}.`,
-          );
+          showCurrentOption("theme", theme, themes);
           return true;
         }
 
-        const nextTheme = findOption(themes, value);
-        appendSystemMessage(
-          nextTheme
-            ? `Theme switched to ${nextTheme.label}.`
-            : `Unknown theme "${value}". Options: ${formatOptionValues(themes)}.`,
-        );
-
-        if (nextTheme) {
-          setTheme(nextTheme.value);
-        }
-
+        switchOption({
+          name: "Theme",
+          value,
+          options: themes,
+          onChange: setTheme,
+        });
         return true;
       }
 
@@ -391,13 +243,13 @@ export function TerminalPortfolio() {
   }
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("portfolio-theme");
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
     if (savedTheme === "default") {
       setTheme("system");
       return;
     }
 
-    if (themes.some((item) => item.value === savedTheme)) {
+    if (isValidTheme(savedTheme)) {
       setTheme(savedTheme);
     }
   }, []);
@@ -406,8 +258,27 @@ export function TerminalPortfolio() {
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.style.colorScheme =
       theme === "system" ? "light dark" : theme;
-    window.localStorage.setItem("portfolio-theme", theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    const terminalBody = terminalBodyRef.current;
+
+    if (!terminalBody) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      terminalBody.scrollTo({
+        top: terminalBody.scrollHeight,
+        behavior: "smooth",
+      });
+      messagesEndRef.current?.scrollIntoView({
+        block: "end",
+        behavior: "smooth",
+      });
+    });
+  }, [messages, isLoading]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -431,44 +302,38 @@ export function TerminalPortfolio() {
 
     setIsLoading(true);
 
-    const userMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: question,
-    };
+    const userMessage = createMessage("user", question);
+    const history = toApiHistory(messages);
 
     setMessages((currentMessages) => [...currentMessages, userMessage]);
 
     try {
-      const response = await fetch("/api/rag", {
+      const response = await fetch(RAG_API_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question, persona }),
+        body: JSON.stringify({ question, persona, history }),
       });
 
       const payload = await response.json();
       if (!response.ok) {
-        throw new Error(payload.error || "Failed to get an answer.");
+        throw new Error(payload.error || DEFAULT_ERROR_MESSAGE);
       }
 
-      const agentMessage = {
-        id: `agent-${Date.now()}`,
-        role: "agent",
-        content: payload.answer || "No answer received from the server.",
-      };
-
-      setMessages((currentMessages) => [...currentMessages, agentMessage]);
-    } catch (error) {
-      setErrorMessage(error.message || "Failed to get an answer.");
       setMessages((currentMessages) => [
         ...currentMessages,
-        {
-          id: `system-${Date.now()}`,
-          role: "system",
-          content: `Error: ${error.message || "Failed to get an answer."}`,
-        },
+        createMessage(
+          "agent",
+          payload.answer || "No answer received from the server.",
+        ),
+      ]);
+    } catch (error) {
+      const message = error.message || DEFAULT_ERROR_MESSAGE;
+      setErrorMessage(message);
+      setMessages((currentMessages) => [
+        ...currentMessages,
+        createSystemMessage(`Error: ${message}`),
       ]);
     } finally {
       setIsLoading(false);
@@ -569,7 +434,7 @@ export function TerminalPortfolio() {
           </div>
         </header>
 
-        <div className="terminal-body">
+        <div className="terminal-body" ref={terminalBodyRef}>
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
@@ -586,6 +451,7 @@ export function TerminalPortfolio() {
               </div>
             </div>
           ) : null}
+          <div ref={messagesEndRef} className="messages-end" aria-hidden="true" />
         </div>
 
         <form className="input-wrapper" onSubmit={handleSubmit}>

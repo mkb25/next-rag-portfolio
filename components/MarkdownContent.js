@@ -14,6 +14,10 @@ function isSafeUrl(url) {
   return /^(https?:|mailto:|tel:)/i.test(url);
 }
 
+function normalizeMarkdownHref(href) {
+  return href.trim().replace(/^<(.+)>$/, "$1");
+}
+
 function splitTrailingPunctuation(value) {
   const match = value.match(/^(.+?)([.,!?;:]+)?$/);
 
@@ -52,7 +56,7 @@ function formatAutoLinkLabel(value) {
 function renderMarkdownLink(token, key) {
   const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
   const label = linkMatch?.[1] || token;
-  const href = linkMatch?.[2] || "";
+  const href = normalizeMarkdownHref(linkMatch?.[2] || "");
 
   if (!isSafeUrl(href)) {
     return label;
@@ -131,18 +135,67 @@ function renderInlineMarkdown(text, keyPrefix) {
   return parts;
 }
 
-function splitMarkdownTableRow(line) {
+function hasTableSeparator(line) {
+  return /(^|[^\\])\|/.test(line);
+}
+
+function trimOuterTablePipes(line) {
   return line
     .trim()
     .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|")
-    .map((cell) => cell.trim());
+    .replace(/(?<!\\)\|$/, "");
+}
+
+function splitMarkdownTableRow(line) {
+  const cells = [];
+  let cell = "";
+  let bracketDepth = 0;
+  let parenDepth = 0;
+  const row = trimOuterTablePipes(line);
+
+  for (let index = 0; index < row.length; index += 1) {
+    const character = row[index];
+    const previousCharacter = row[index - 1];
+
+    if (character === "[" && previousCharacter !== "\\") {
+      bracketDepth += 1;
+    } else if (character === "]" && previousCharacter !== "\\") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+    } else if (character === "(" && previousCharacter !== "\\") {
+      parenDepth += 1;
+    } else if (character === ")" && previousCharacter !== "\\") {
+      parenDepth = Math.max(0, parenDepth - 1);
+    }
+
+    if (
+      character === "|" &&
+      previousCharacter !== "\\" &&
+      bracketDepth === 0 &&
+      parenDepth === 0
+    ) {
+      cells.push(cell.trim().replace(/\\\|/g, "|"));
+      cell = "";
+      continue;
+    }
+
+    cell += character;
+  }
+
+  cells.push(cell.trim().replace(/\\\|/g, "|"));
+  return cells;
 }
 
 function isMarkdownTableSeparator(line) {
   const cells = splitMarkdownTableRow(line);
   return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+}
+
+function isMarkdownTableStart(lines, index) {
+  return (
+    hasTableSeparator(lines[index]) &&
+    lines[index + 1] &&
+    isMarkdownTableSeparator(lines[index + 1])
+  );
 }
 
 function parseCodeBlock(lines, startIndex, fenceMatch) {
@@ -166,8 +219,8 @@ function parseTableBlock(lines, startIndex) {
   const rows = [];
   let index = startIndex + 2;
 
-  while (index < lines.length && lines[index].trim().startsWith("|")) {
-    rows.push(splitMarkdownTableRow(lines[index]));
+  while (index < lines.length && hasTableSeparator(lines[index])) {
+    rows.push(normalizeTableRow(splitMarkdownTableRow(lines[index]), headers));
     index += 1;
   }
 
@@ -175,6 +228,16 @@ function parseTableBlock(lines, startIndex) {
     block: { type: "table", headers, rows },
     nextIndex: index,
   };
+}
+
+function normalizeTableRow(row, headers) {
+  if (row.length <= headers.length) {
+    return row;
+  }
+
+  const fixedCells = row.slice(0, headers.length - 1);
+  const mergedLastCell = row.slice(headers.length - 1).join(" | ");
+  return [...fixedCells, mergedLastCell];
 }
 
 function parseListBlock(lines, startIndex, type, matcher) {
@@ -197,13 +260,16 @@ function parseListBlock(lines, startIndex, type, matcher) {
   };
 }
 
-function isParagraphBoundary(line) {
+function isParagraphBoundary(lines, index) {
+  const line = lines[index];
+
   return (
     !line.trim() ||
     BLOCK_MATCHERS.codeFence.test(line) ||
     BLOCK_MATCHERS.heading.test(line) ||
     BLOCK_MATCHERS.unorderedListItem.test(line) ||
-    BLOCK_MATCHERS.orderedListItem.test(line)
+    BLOCK_MATCHERS.orderedListItem.test(line) ||
+    isMarkdownTableStart(lines, index)
   );
 }
 
@@ -211,7 +277,7 @@ function parseParagraphBlock(lines, startIndex) {
   const paragraphLines = [];
   let index = startIndex;
 
-  while (index < lines.length && !isParagraphBoundary(lines[index])) {
+  while (index < lines.length && !isParagraphBoundary(lines, index)) {
     paragraphLines.push(lines[index].trim());
     index += 1;
   }
@@ -243,11 +309,7 @@ function parseMarkdownBlocks(markdown) {
       continue;
     }
 
-    if (
-      line.trim().startsWith("|") &&
-      lines[index + 1] &&
-      isMarkdownTableSeparator(lines[index + 1])
-    ) {
+    if (isMarkdownTableStart(lines, index)) {
       const { block, nextIndex } = parseTableBlock(lines, index);
       blocks.push(block);
       index = nextIndex;

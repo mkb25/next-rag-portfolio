@@ -6,6 +6,8 @@ import { MarkdownContent } from "@/components/MarkdownContent";
 const RAG_API_ENDPOINT = "/api/rag";
 const THEME_STORAGE_KEY = "portfolio-theme";
 const DEFAULT_ERROR_MESSAGE = "Failed to get an answer.";
+const PERSONA_CHANGE_KIND = "persona-change";
+const API_HISTORY_LIMIT = 8;
 
 const personas = [
   { value: "default", label: "Friendly Assistant" },
@@ -40,11 +42,12 @@ function createSystemMessage(content) {
   return createMessage("system", content);
 }
 
-function createMessage(role, content) {
+function createMessage(role, content, metadata = {}) {
   return {
     id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     role,
     content,
+    ...metadata,
   };
 }
 
@@ -122,9 +125,17 @@ function MessageBubble({ message }) {
 }
 
 function toApiHistory(messages) {
-  return messages
+  const lastPersonaChangeIndex = messages.findLastIndex(
+    (message) => message.kind === PERSONA_CHANGE_KIND,
+  );
+  const activePersonaMessages =
+    lastPersonaChangeIndex === -1
+      ? messages
+      : messages.slice(lastPersonaChangeIndex + 1);
+
+  return activePersonaMessages
     .filter((message) => message.role === "user" || message.role === "agent")
-    .slice(-8)
+    .slice(-API_HISTORY_LIMIT)
     .map((message) => ({
       role: message.role === "agent" ? "assistant" : "user",
       content: message.content,
@@ -149,6 +160,34 @@ export function TerminalPortfolio() {
       ...currentMessages,
       createSystemMessage(content),
     ]);
+  }
+
+  function switchPersona(nextOption) {
+    if (nextOption.value === persona) {
+      return;
+    }
+
+    setPersona(nextOption.value);
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      createMessage("system", `Persona switched to ${nextOption.label}.`, {
+        kind: PERSONA_CHANGE_KIND,
+        persona: nextOption.value,
+      }),
+    ]);
+  }
+
+  function switchPersonaByValue(value) {
+    const nextOption = findOption(personas, value);
+
+    if (!nextOption) {
+      appendSystemMessage(
+        `Unknown persona "${value}". Options: ${formatOptionValues(personas)}.`,
+      );
+      return;
+    }
+
+    switchPersona(nextOption);
   }
 
   function showCurrentOption(name, currentValue, options) {
@@ -210,12 +249,7 @@ export function TerminalPortfolio() {
           return true;
         }
 
-        switchOption({
-          name: "Persona",
-          value,
-          options: personas,
-          onChange: setPersona,
-        });
+        switchPersonaByValue(value);
         return true;
       }
 
@@ -422,7 +456,7 @@ export function TerminalPortfolio() {
               <span className="sr-only">Select assistant persona</span>
               <select
                 value={persona}
-                onChange={(event) => setPersona(event.target.value)}
+                onChange={(event) => switchPersonaByValue(event.target.value)}
               >
                 {personas.map((option) => (
                   <option key={option.value} value={option.value}>

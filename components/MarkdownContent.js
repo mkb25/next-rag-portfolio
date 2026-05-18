@@ -240,6 +240,12 @@ function normalizeTableRow(row, headers) {
   return [...fixedCells, mergedLastCell];
 }
 
+function sanitizeTableCell(text) {
+  return (text || "")
+    .replace(/<br\s*\/?>/gi, " • ")
+    .replace(/<[^>]+>/g, "");
+}
+
 function parseListBlock(lines, startIndex, type, matcher) {
   const items = [];
   let index = startIndex;
@@ -397,7 +403,7 @@ function TableBlock({ block, blockIndex }) {
               {block.headers.map((_, cellIndex) => (
                 <td key={`cell-${blockIndex}-${rowIndex}-${cellIndex}`}>
                   {renderInlineMarkdown(
-                    row[cellIndex] || "",
+                    sanitizeTableCell(row[cellIndex] || ""),
                     `cell-${blockIndex}-${rowIndex}-${cellIndex}`,
                   )}
                 </td>

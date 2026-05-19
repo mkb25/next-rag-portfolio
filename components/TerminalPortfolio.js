@@ -6,6 +6,8 @@ import { MarkdownContent } from "@/components/MarkdownContent";
 const RAG_API_ENDPOINT = "/api/rag";
 const THEME_STORAGE_KEY = "portfolio-theme";
 const DEFAULT_ERROR_MESSAGE = "Failed to get an answer.";
+const REQUEST_ERROR_MESSAGE =
+  "Sorry, I couldn't reach the assistant. Please try again in a moment.";
 const PERSONA_CHANGE_KIND = "persona-change";
 const API_HISTORY_LIMIT = 8;
 
@@ -350,7 +352,7 @@ export function TerminalPortfolio() {
         body: JSON.stringify({ question, persona, history }),
       });
 
-      const payload = await response.json();
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(payload.error || DEFAULT_ERROR_MESSAGE);
       }
@@ -363,7 +365,10 @@ export function TerminalPortfolio() {
         ),
       ]);
     } catch (error) {
-      const message = error.message || DEFAULT_ERROR_MESSAGE;
+      const message =
+        error instanceof TypeError
+          ? REQUEST_ERROR_MESSAGE
+          : error.message || DEFAULT_ERROR_MESSAGE;
       setErrorMessage(message);
       setMessages((currentMessages) => [
         ...currentMessages,

@@ -500,7 +500,7 @@ export function TerminalPortfolio() {
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleInputKeyDown}
-            placeholder="Ask me something about the portfolio..."
+            placeholder="Ask about the portfolio..."
             autoComplete="off"
           />
           <button type="submit" disabled={isLoading || !inputValue.trim()}>

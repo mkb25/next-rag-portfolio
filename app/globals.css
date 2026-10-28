@@ -188,6 +188,11 @@ select {
   letter-spacing: 0.04em;
 }
 
+.theme-picker,
+.persona-picker {
+  display: inline-flex;
+}
+
 .theme-picker select,
 .persona-picker select {
   appearance: none;
@@ -196,6 +201,11 @@ select {
   color: var(--accent-strong);
   padding: 10px 14px;
   border-radius: 999px;
+  cursor: pointer;
+  outline: none;
+  text-align: center;
+  text-align-last: center;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .theme-picker option,
@@ -373,9 +383,19 @@ select {
   max-width: 100%;
   color: var(--accent-color);
   font-family: var(--font-mono), monospace;
-  font-size: clamp(0.34rem, 0.46vw, 0.58rem);
+  font-size: clamp(0.28rem, 0.48vw, 0.58rem);
   line-height: 1.15;
   overflow-x: clip;
+}
+
+.mobile-title {
+  display: none;
+  margin: 0 0 8px;
+  font-family: var(--font-mono), monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent-color);
+  letter-spacing: 0.02em;
 }
 
 .input-wrapper {
@@ -478,44 +498,380 @@ select {
   }
 }
 
-@media (max-width: 820px) {
+/* ============================================
+   RESPONSIVE DESIGN SYSTEM
+   - ≥768px  : Desktop & Tablet (Identical layout)
+   - ≤767px  : Phones / Mobile view
+   - ≤480px  : Small phones
+   - ≤360px  : Very small / older phones
+   ============================================ */
+
+/* --- Mobile phones (< 768px) --- */
+@media (max-width: 767px) {
   .page-shell {
-    padding: 12px;
+    padding: 8px;
+    padding: 8px env(safe-area-inset-right, 8px) 8px env(safe-area-inset-left, 8px);
   }
 
   .terminal-container {
-    height: calc(100vh - 24px);
-    max-height: calc(100vh - 24px);
-    border-radius: 18px;
+    width: 100%;
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    border-radius: 16px;
   }
 
   .terminal-header {
     grid-template-columns: 1fr;
-    justify-items: start;
+    gap: 8px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .controls {
+    display: none;
+  }
+
+  .title {
+    font-size: 0.78rem;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .header-pickers {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
     width: 100%;
-    flex-direction: column;
   }
 
   .theme-picker,
-  .persona-picker,
+  .persona-picker {
+    flex: 0 1 auto;
+  }
+
   .theme-picker select,
   .persona-picker select {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 999px;
+  }
+
+  .terminal-body {
+    padding: 16px 14px;
+    gap: 12px;
+  }
+
+  .message {
+    max-width: 96%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .message.system {
+    max-width: 100%;
+  }
+
+  .ascii-art {
+    font-size: clamp(0.16rem, 1.3vw, 0.36rem);
+    margin-bottom: 10px;
+    line-height: 1.1;
+  }
+
+  .input-wrapper {
+    padding: 12px 14px 6px;
+    gap: 8px;
+  }
+
+  .command-prefix {
+    font-size: 1rem;
+  }
+
+  .input-wrapper input {
+    font-size: 0.9rem;
+  }
+
+  .input-wrapper input::placeholder {
+    font-size: 0.82rem;
+  }
+
+  .input-wrapper button {
+    padding: 9px 12px;
+    font-size: 0.84rem;
+  }
+
+  .markdown-content {
+    gap: 8px;
+  }
+
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5 {
+    font-size: 0.92rem;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    padding-left: 1rem;
+  }
+
+  .markdown-content code {
+    font-size: 0.82em;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .markdown-content pre {
+    padding: 10px;
+    border-radius: 8px;
+  }
+
+  .markdown-content pre code {
+    font-size: 0.8rem;
+  }
+
+  .markdown-content table {
+    font-size: 0.8rem;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    padding: 5px 6px;
+  }
+
+  .error-banner {
+    padding: 0 14px 12px;
+    font-size: 0.84rem;
+  }
+}
+
+/* --- Small phones --- */
+@media (max-width: 480px) {
+  .page-shell {
+    padding: 0;
+  }
+
+  .terminal-container {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    border-radius: 0;
+    border: none;
+  }
+
+  .terminal-header {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .title {
+    font-size: 0.72rem;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .header-pickers {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 6px;
     width: 100%;
+  }
+
+  .theme-picker,
+  .persona-picker {
+    flex: 0 1 auto;
+  }
+
+  .theme-picker select,
+  .persona-picker select {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    border-radius: 999px;
+  }
+
+  .terminal-body {
+    padding: 12px 10px;
+    gap: 10px;
   }
 
   .message {
     max-width: 100%;
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+  }
+
+  .ascii-art {
+    font-size: clamp(0.12rem, 1.05vw, 0.28rem);
+    margin-bottom: 8px;
+    line-height: 1.05;
+    overflow-x: clip;
   }
 
   .input-wrapper {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
+    padding: 10px 10px 6px;
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
+    gap: 8px;
+  }
+
+  .command-prefix {
+    font-size: 0.95rem;
+  }
+
+  .input-wrapper input {
+    font-size: 0.88rem;
+  }
+
+  .input-wrapper input::placeholder {
+    font-size: 0.78rem;
   }
 
   .input-wrapper button {
-    grid-column: 1 / -1;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+  }
+
+  .markdown-content pre code {
+    font-size: 0.75rem;
+  }
+
+  .error-banner {
+    padding: 0 10px 10px;
+    font-size: 0.82rem;
+  }
+}
+
+/* --- Very small / older phones --- */
+@media (max-width: 360px) {
+  .terminal-header {
+    padding: 8px 10px;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .title {
+    font-size: 0.68rem;
+    text-align: center;
+  }
+
+  .header-pickers {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 4px;
     width: 100%;
+  }
+
+  .theme-picker select,
+  .persona-picker select {
+    padding: 3px 6px;
+    font-size: 0.68rem;
+    border-radius: 999px;
+  }
+
+  .terminal-body {
+    padding: 10px 8px;
+    gap: 8px;
+  }
+
+  .message {
+    padding: 8px 10px;
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+
+  .input-wrapper {
+    padding: 8px 8px 4px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 4px));
+    gap: 6px;
+  }
+
+  .input-wrapper input {
+    font-size: 0.84rem;
+  }
+
+  .input-wrapper button {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+  }
+}
+
+/* --- Height-constrained viewports (landscape phones) --- */
+@media (max-height: 500px) {
+  .page-shell {
+    padding: 4px;
+  }
+
+  .terminal-container {
+    height: calc(100vh - 8px);
+    height: calc(100dvh - 8px);
+    max-height: calc(100vh - 8px);
+    max-height: calc(100dvh - 8px);
+    border-radius: 10px;
+  }
+
+  .terminal-header {
+    padding: 8px 14px;
+    gap: 8px;
+  }
+
+  .terminal-body {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .ascii-art {
+    font-size: clamp(0.12rem, 0.6vw, 0.24rem);
+    margin-bottom: 6px;
+    line-height: 1.0;
+    overflow-x: clip;
+  }
+
+  .message {
+    padding: 8px 12px;
+  }
+
+  .input-wrapper {
+    padding: 8px 14px 4px;
+  }
+}
+
+/* --- Hover-capable devices: subtle interactive enhancements --- */
+@media (hover: hover) {
+  .input-wrapper button:not(:disabled):hover {
+    filter: brightness(1.15);
+    transform: translateY(-1px);
+    transition: filter 0.15s, transform 0.15s;
+  }
+
+  .theme-picker select:hover,
+  .persona-picker select:hover {
+    border-color: var(--accent-color);
+    transition: border-color 0.15s;
+  }
+}
+
+/* --- Touch devices: larger tap targets --- */
+@media (pointer: coarse) {
+  .input-wrapper button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .input-wrapper input {
+    min-height: 44px;
   }
 }

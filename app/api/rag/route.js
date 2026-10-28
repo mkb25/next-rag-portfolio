@@ -15,6 +15,10 @@ function getSafeErrorMessage(error) {
     return "The AI service rejected the request. Please check the API key.";
   }
 
+  if (error?.status === 404 || error?.statusCode === 404) {
+    return "The requested AI model was not found or is unavailable.";
+  }
+
   if (error?.status === 429 || error?.statusCode === 429) {
     return "The AI service is busy or rate-limited. Please try again shortly.";
   }
